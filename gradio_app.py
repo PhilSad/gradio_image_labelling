@@ -87,6 +87,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-# Run the script
-# python gradio_app.py --output_file=annotations.json --image_root=primark_smol --classes=plat_front,plat_back,porte_front,porte_back,unknown
