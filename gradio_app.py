@@ -41,13 +41,9 @@ def main():
     output_file = args.output_file
     image_root = args.image_root
     classes = args.classes.split(',')
-    # shortcuts = args.shortcuts.split(',')
-
-    # assert len(classes) == len(shortcuts), "Number of classes and shortcuts must be the same"
 
     images = collect_images(image_root)
     existing_data, annotated_images = load_existing_annotations(output_file)
-
     # Filter out images that are already annotated
     images_to_label = [img for img in images if img not in annotated_images]
 
@@ -57,29 +53,31 @@ def main():
 
     with gr.Blocks() as demo:
         current_index = gr.State(value=0)
-        data_state = gr.State(value=existing_data)
+        # data_state = gr.State(value=existing_data)
         with gr.Row():
             image_display = gr.Image(label="Image to classify", value=images_to_label[0], show_label=True, height=300, width=300)
 
-        def classify_image(idx, data, label):
+        def classify_image(idx, label):
             image_path = images_to_label[idx]
+            with open(output_file, 'r') as f:
+                data = json.load(f)
             data.append({'path': image_path, 'label': label})
             with open(output_file, 'w') as f:
-                json.dump(data, f)
+                json.dump(data, f, indent=4, ensure_ascii=False)
             idx += 1
             if idx < len(images_to_label):
                 next_image = images_to_label[idx]
                 return next_image, idx, data
             else:
-                return gr.update(value=None), idx, data
+                return gr.update(value=None), idx
 
         with gr.Row():
             for cls in classes:
                 btn = gr.Button(cls, variant='primary')
                 btn.click(
                     fn=partial(classify_image, label=cls),
-                    inputs=[current_index, data_state],
-                    outputs=[image_display, current_index, data_state]
+                    inputs=[current_index],
+                    outputs=[image_display, current_index]
                 )
             
 
