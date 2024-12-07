@@ -34,7 +34,9 @@ def load_existing_annotations(output_file):
     else:
         data = []
         annotated_images = set()
-    return data, annotated_images
+        with open(output_file, 'w') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+    return annotated_images
 
 def main():
     args = parse_arguments()
@@ -43,33 +45,55 @@ def main():
     classes = args.classes.split(',')
 
     images = collect_images(image_root)
-    existing_data, annotated_images = load_existing_annotations(output_file)
+    annotated_images = load_existing_annotations(output_file)
     # Filter out images that are already annotated
-    images_to_label = [img for img in images if img not in annotated_images]
+    images_to_label = [img for img in images]
 
     if not images_to_label:
         print("No images to label.")
         return
 
-    with gr.Blocks() as demo:
-        current_index = gr.State(value=0)
-        # data_state = gr.State(value=existing_data)
-        with gr.Row():
-            image_display = gr.Image(label="Image to classify", value=images_to_label[0], show_label=True, height=300, width=300)
 
-        def classify_image(idx, label):
-            image_path = images_to_label[idx]
-            with open(output_file, 'r') as f:
-                data = json.load(f)
-            data.append({'path': image_path, 'label': label})
+
+    def classify_image(idx, label):
+        image_path = images_to_label[idx]
+        with open(output_file, 'r') as f:
+            data = json.load(f)
+        data.append({'path': image_path, 'label': label})
+        with open(output_file, 'w') as f:
+            json.dump(data, f, indent=4, ensure_ascii=False)
+        idx += 1
+        if idx < len(images_to_label):
+            next_image = images_to_label[idx]
+            return next_image, idx, f"{idx+1}/{len(images_to_label)}"
+        else:
+            return gr.update(value=None), idx, f"{idx+1}/{len(images_to_label)}"
+    
+    def undo_last_annotation(idx):
+        with open(output_file, 'r') as f:
+            data = json.load(f)
+        if data:
+            data.pop()
             with open(output_file, 'w') as f:
                 json.dump(data, f, indent=4, ensure_ascii=False)
-            idx += 1
-            if idx < len(images_to_label):
-                next_image = images_to_label[idx]
-                return next_image, idx, data
-            else:
-                return gr.update(value=None), idx
+        idx -= 1
+        if idx >= 0:
+            prev_image = images_to_label[idx]
+            return prev_image, idx, f"{idx+1}/{len(images_to_label)}"
+        else:
+            return gr.update(value=None), idx, f"{idx+1}/{len(images_to_label)}"
+
+
+
+
+    with gr.Blocks() as demo:
+        current_index = gr.State(value=len(annotated_images))
+        
+        with gr.Row():
+            count = gr.Label(f"{current_index.value+1}/{len(images_to_label)}", show_label=False)
+        
+        with gr.Row():
+            image_display = gr.Image(label="Image to classify", value=images_to_label[len(annotated_images)], show_label=True, height=300, width=300)
 
         with gr.Row():
             for cls in classes:
@@ -77,8 +101,16 @@ def main():
                 btn.click(
                     fn=partial(classify_image, label=cls),
                     inputs=[current_index],
-                    outputs=[image_display, current_index]
+                    outputs=[image_display, current_index, count]
                 )
+        with gr.Row():
+            undo_btn = gr.Button("Undo", variant='secondary')
+            undo_btn.click(
+                fn=undo_last_annotation,
+                inputs=[current_index],
+                outputs=[image_display, current_index, count]
+            )
+        
             
 
     demo.launch()
